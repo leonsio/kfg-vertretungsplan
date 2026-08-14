@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.lovelace.const import LOVELACE_DATA
 from homeassistant.config_entries import ConfigEntry
@@ -14,7 +15,7 @@ from .coordinator import KFGCoordinator
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 CARD_URL = f"/api/{DOMAIN}/static/vertretungsplan-card.js"
-CARD_RESOURCE_URL = f"{CARD_URL}?v=1.0.6"
+CARD_RESOURCE_URL = f"{CARD_URL}?v=1.0.7"
 
 
 async def _register_lovelace_resource(hass: HomeAssistant) -> None:
@@ -25,7 +26,6 @@ async def _register_lovelace_resource(hass: HomeAssistant) -> None:
 
     resources = lovelace_data.resources
     if not hasattr(resources, "async_create_item"):
-        # YAML-mode Lovelace resources cannot be modified by an integration.
         return
 
     await resources.async_load()
@@ -35,7 +35,6 @@ async def _register_lovelace_resource(hass: HomeAssistant) -> None:
         if url.split("?", 1)[0] != CARD_URL:
             continue
 
-        # Upgrade an older automatically/manual registered URL in place.
         if url != CARD_RESOURCE_URL or resource.get("type") != "module":
             await resources.async_update_item(
                 resource["id"],
@@ -58,12 +57,13 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         [StaticPathConfig(f"/api/{DOMAIN}/static", str(static_dir), False)]
     )
 
+    # Load the card globally. This guarantees that the custom element exists
+    # even when a dashboard resource has not yet been refreshed.
+    add_extra_js_url(hass, CARD_RESOURCE_URL)
+
     if hass.is_running:
         hass.async_create_task(_register_lovelace_resource(hass))
     else:
-        # Lovelace's resource collection is guaranteed to be initialized after
-        # Home Assistant has started. Registering earlier can miss the storage
-        # collection on a fresh installation.
         hass.bus.async_listen_once(
             EVENT_HOMEASSISTANT_STARTED,
             lambda _event: hass.async_create_task(_register_lovelace_resource(hass)),
