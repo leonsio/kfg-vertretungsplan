@@ -41,12 +41,11 @@ und erstelle beispielsweise ein Dashboard mit dem Namen:
 
 **Karte hinzufügen → Manuell**
 
-Füge folgende Konfiguration ein:
+Füge folgende YAML-Konfiguration ein:
 
 ```yaml
 type: custom:kfg-vertretungsplan-card
 sensor: sensor.vertretungsplan
-selected_entity: input_text.vertretungsplan_klassen
 ```
 
 Speichere die Karte.
@@ -55,7 +54,7 @@ Nach der Installation der Integration sollte die Karte bereits als **KFG Vertret
 
 ### 3. Klassen auswählen
 
-Die Karte liest die verfügbaren Klassen aus den Daten des Vertretungsplan-Sensors. Mehrere Klassen können gleichzeitig über die anklickbaren Klassen-Chips ausgewählt werden.
+Die Karte liest die verfügbaren Klassen aus den Daten des Vertretungsplan-Sensors. Mehrere Klassen können gleichzeitig über die anklickbaren Klassen-Chips ausgewählt werden. Die Auswahl wird im Browser gespeichert.
 
 Beispiel:
 
@@ -65,7 +64,7 @@ Beispiel:
 
 In diesem Beispiel werden nur die Vertretungen für `5b2` und `7n` angezeigt.
 
-Wenn keine Klasse ausgewählt ist, werden die verfügbaren Vertretungen für alle Klassen angezeigt.
+Mit **Alle Klassen** wird die Auswahl zurückgesetzt und wieder der vollständige Plan angezeigt.
 
 ### 4. Aktualisierung
 
@@ -75,4 +74,5 @@ Der Sensor wird von der Integration automatisch aktualisiert. Das Dashboard verw
 
 - Für HACS muss das Repository als **Integration** hinzugefügt werden.
 - Die Lovelace-Karte wird automatisch mit der Integration bereitgestellt.
+- Die Klassenauswahl wird lokal im Browser gespeichert; sie benötigt keinen zusätzlichen Home-Assistant-Helper.
 - Nach einem Update der Integration kann ein Neuladen des Browsers erforderlich sein, damit eine aktualisierte JavaScript-Karte geladen wird.
