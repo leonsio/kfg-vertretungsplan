@@ -5,6 +5,7 @@ from pathlib import Path
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.lovelace.const import LOVELACE_DATA
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 
@@ -13,17 +14,34 @@ from .coordinator import KFGCoordinator
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 CARD_URL = f"/api/{DOMAIN}/static/vertretungsplan-card.js"
-CARD_RESOURCE_URL = f"{CARD_URL}?v=1.0.5"
+CARD_RESOURCE_URL = f"{CARD_URL}?v=1.0.6"
 
 
 async def _register_lovelace_resource(hass: HomeAssistant) -> None:
-    """Register the custom card as a Lovelace module resource."""
-    resources = hass.data[LOVELACE_DATA].resources
+    """Register or update the custom card as a Lovelace module resource."""
+    lovelace_data = hass.data.get(LOVELACE_DATA)
+    if lovelace_data is None:
+        return
+
+    resources = lovelace_data.resources
+    if not hasattr(resources, "async_create_item"):
+        # YAML-mode Lovelace resources cannot be modified by an integration.
+        return
+
     await resources.async_load()
 
     for resource in resources.async_items():
-        if resource["url"].split("?", 1)[0] == CARD_URL:
-            return
+        url = resource.get("url", "")
+        if url.split("?", 1)[0] != CARD_URL:
+            continue
+
+        # Upgrade an older automatically/manual registered URL in place.
+        if url != CARD_RESOURCE_URL or resource.get("type") != "module":
+            await resources.async_update_item(
+                resource["id"],
+                {"url": CARD_RESOURCE_URL, "res_type": "module"},
+            )
+        return
 
     await resources.async_create_item(
         {
@@ -39,7 +57,14 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     await hass.http.async_register_static_paths(
         [StaticPathConfig(f"/api/{DOMAIN}/static", str(static_dir), False)]
     )
-    await _register_lovelace_resource(hass)
+
+    # Lovelace's resource collection is guaranteed to be initialized after
+    # Home Assistant has started. Registering earlier can silently miss the
+    # storage collection on a fresh installation.
+    hass.bus.async_listen_once(
+        EVENT_HOMEASSISTANT_STARTED,
+        lambda _event: hass.async_create_task(_register_lovelace_resource(hass)),
+    )
     return True
 
 
