@@ -1,0 +1,16 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "KFG Vertretungsplan",
+        "description": "Konfiguriere die Basis-URL und das Aktualisierungsintervall.",
+        "data": {
+          "base_url": "Basis-URL",
+          "scan_interval": "Aktualisierung (Sekunden)"
+        }
+      }
+    },
+    "error": {"invalid_url": "Bitte eine gültige HTTP- oder HTTPS-URL eingeben."},
+    "abort": {"single_instance_allowed": "Die Integration ist bereits eingerichtet."}
+  }
+}
