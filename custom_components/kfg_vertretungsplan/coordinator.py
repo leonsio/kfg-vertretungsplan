@@ -7,6 +7,7 @@ from typing import Any
 
 from aiohttp import ClientError
 from bs4 import BeautifulSoup
+from bs4.dammit import UnicodeDammit
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -64,11 +65,12 @@ class KFGCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if response.status != 200:
                     _LOGGER.debug("Untis week %s returned HTTP %s", week, response.status)
                     return None
-                body = await response.text(errors="replace")
+                raw_body = await response.read()
         except (ClientError, TimeoutError) as err:
             _LOGGER.warning("Unable to fetch %s: %s", url, err)
             return None
 
+        body = self._decode_html(raw_body)
         soup = BeautifulSoup(body, "html.parser")
         title = soup.title.get_text(" ", strip=True) if soup.title else ""
         if "Untis" not in title:
@@ -100,6 +102,22 @@ class KFGCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return {"week": week, "week_type": f"Woche {week_match.group(1).upper()}" if week_match else "", "title": title, "url": url, "days": days}
 
     @staticmethod
+    def _decode_html(raw_body: bytes) -> str:
+        """Decode Untis HTML, including legacy German encodings used by the school site."""
+        # UnicodeDammit detects HTML meta charset declarations and common legacy encodings.
+        dammit = UnicodeDammit(raw_body, is_html=True)
+        if dammit.unicode_markup:
+            return dammit.unicode_markup
+
+        # The KFG Untis pages historically use Windows-1252/ISO-8859-1.
+        for encoding in ("cp1252", "iso-8859-1", "utf-8"):
+            try:
+                return raw_body.decode(encoding)
+            except UnicodeDecodeError:
+                continue
+        return raw_body.decode("utf-8", errors="replace")
+
+    @staticmethod
     def _day_header_text(anchor) -> str:
         parent = anchor.parent
         if parent:
@@ -121,13 +139,34 @@ class KFGCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @staticmethod
     def _extract_news(anchor) -> list[list[str]]:
-        heading = anchor.find_next(lambda tag: tag.name in ("b", "strong") and "Nachrichten zum Tag" in tag.get_text(" ", strip=True))
-        if heading is None:
+        """Extract the day news table following the day's anchor.
+
+        Untis has used different markup for the news heading over time, so do not
+        require a specific tag such as <b> or <strong>. The heading text is the
+        stable part of the markup.
+        """
+        for node in anchor.find_all_next():
+            if not getattr(node, "name", None):
+                continue
+            text = node.get_text(" ", strip=True)
+            if not re.search(r"Nachrichten\s+(?:zum\s+)?Tag", text, re.IGNORECASE):
+                continue
+
+            table = node.find_next("table")
+            if table is None:
+                continue
+
+            news: list[list[str]] = []
+            for row in table.find_all("tr"):
+                cells = [cell.get_text(" ", strip=True) for cell in row.find_all(["td", "th"])]
+                cells = [cell for cell in cells if cell]
+                if cells:
+                    news.append(cells)
+            if news:
+                _LOGGER.debug("Found %s news row(s) for day anchor %s", len(news), anchor.get("name"))
+                return news
             return []
-        table = heading.find_next("table")
-        if table is None:
-            return []
-        return [[cell.get_text(" ", strip=True) for cell in row.find_all(["td", "th"])] for row in table.find_all("tr") if row.find_all(["td", "th"])]
+        return []
 
     @staticmethod
     def _entry(cells) -> dict[str, Any]:
