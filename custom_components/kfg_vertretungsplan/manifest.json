@@ -1,13 +1,13 @@
 {
   "domain": "kfg_vertretungsplan",
   "name": "KFG Vertretungsplan",
-  "version": "1.0.1",
-  "documentation": "https://github.com/leonsio/kfg-vertretungsplan",
-  "issue_tracker": "https://github.com/leonsio/kfg-vertretungsplan/issues",
   "codeowners": ["@leonsio"],
   "config_flow": true,
+  "documentation": "https://github.com/leonsio/kfg-vertretungsplan",
   "integration_type": "service",
   "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/leonsio/kfg-vertretungsplan/issues",
   "requirements": ["beautifulsoup4>=4.12.0"],
-  "single_config_entry": true
+  "single_config_entry": true,
+  "version": "1.0.1"
 }
