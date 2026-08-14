@@ -15,7 +15,7 @@ from .coordinator import KFGCoordinator
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 CARD_URL = f"/api/{DOMAIN}/static/vertretungsplan-card.js"
-CARD_RESOURCE_URL = f"{CARD_URL}?v=1.0.8"
+CARD_RESOURCE_URL = f"{CARD_URL}?v=1.0.9"
 
 
 async def _register_lovelace_resource(hass: HomeAssistant) -> None:
@@ -32,7 +32,12 @@ async def _register_lovelace_resource(hass: HomeAssistant) -> None:
 
     for resource in resources.async_items():
         url = resource.get("url", "")
-        if url.split("?", 1)[0] != CARD_URL:
+        base_url = url.split("?", 1)[0]
+
+        # Match both the current integration URL and resources created by
+        # older versions (for example /local/.../vertretungsplan-card.js).
+        # This makes the cache-busting migration from v=1.0.5 automatic.
+        if base_url != CARD_URL and not base_url.endswith("/vertretungsplan-card.js"):
             continue
 
         if url != CARD_RESOURCE_URL or resource.get("res_type") != "module":
