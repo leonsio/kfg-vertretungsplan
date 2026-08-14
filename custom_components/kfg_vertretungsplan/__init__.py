@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.lovelace.const import LOVELACE_DATA
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
@@ -17,7 +18,7 @@ CARD_RESOURCE_URL = f"{CARD_URL}?v=1.0.5"
 
 async def _register_lovelace_resource(hass: HomeAssistant) -> None:
     """Register the custom card as a Lovelace module resource."""
-    resources = hass.data["lovelace"]["resources"]
+    resources = hass.data[LOVELACE_DATA].resources
     await resources.async_load()
 
     for resource in resources.async_items():
