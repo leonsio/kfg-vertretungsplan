@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -13,6 +12,24 @@ from .coordinator import KFGCoordinator
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 CARD_URL = f"/api/{DOMAIN}/static/vertretungsplan-card.js"
+CARD_RESOURCE_URL = f"{CARD_URL}?v=1.0.5"
+
+
+async def _register_lovelace_resource(hass: HomeAssistant) -> None:
+    """Register the custom card as a Lovelace module resource."""
+    resources = hass.data["lovelace"]["resources"]
+    await resources.async_load()
+
+    for resource in resources.async_items():
+        if resource["url"].split("?", 1)[0] == CARD_URL:
+            return
+
+    await resources.async_create_item(
+        {
+            "res_type": "module",
+            "url": CARD_RESOURCE_URL,
+        }
+    )
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -21,7 +38,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     await hass.http.async_register_static_paths(
         [StaticPathConfig(f"/api/{DOMAIN}/static", str(static_dir), False)]
     )
-    add_extra_js_url(hass, CARD_URL)
+    await _register_lovelace_resource(hass)
     return True
 
 
