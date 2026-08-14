@@ -1,19 +1,25 @@
 from __future__ import annotations
+
 from datetime import date, datetime, timedelta
 import logging
 import re
 from typing import Any
+
 from aiohttp import ClientError
 from bs4 import BeautifulSoup
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+WEEKDAYS = {"Montag": 1, "Dienstag": 2, "Mittwoch": 3, "Donnerstag": 4, "Freitag": 5, "Monday": 1, "Tuesday": 2, "Wednesday": 3, "Thursday": 4, "Friday": 5}
+
 
 class KFGCoordinator(DataUpdateCoordinator[dict[str, Any]]):
+    """Fetch and parse the school-wide Untis substitution plan."""
+
     def __init__(self, hass, base_url: str, scan_interval: int) -> None:
-        self.hass = hass
         self.base_url = base_url.rstrip("/")
         super().__init__(hass, logger=_LOGGER, name=DOMAIN, update_interval=timedelta(seconds=scan_interval))
 
@@ -21,25 +27,22 @@ class KFGCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         today = date.today()
         current_week = today.isocalendar().week
         next_week = (today + timedelta(days=7)).isocalendar().week
-        weeks = []
-        for week in (current_week, next_week):
-            parsed = await self._fetch_week(week)
-            if parsed:
-                weeks.append(parsed)
+        weeks = [parsed for week in (current_week, next_week) if (parsed := await self._fetch_week(week)) is not None]
         if not weeks:
             raise UpdateFailed("Kein Vertretungsplan konnte geladen werden.")
+
         days = []
         for week_data in weeks:
             for day in week_data["days"]:
                 iso_date = self._date_for_weekday(today, week_data["week"], day["weekday_number"])
-                if iso_date and iso_date >= today:
-                    item = dict(day)
-                    item["iso_date"] = iso_date.isoformat()
-                    item["week"] = week_data["week"]
-                    item["week_type"] = week_data.get("week_type", "")
-                    days.append(item)
+                if iso_date is None or iso_date < today:
+                    continue
+                item = dict(day)
+                item.update(iso_date=iso_date.isoformat(), week=week_data["week"], week_type=week_data.get("week_type", ""))
+                days.append(item)
         days.sort(key=lambda item: item["iso_date"])
-        classes = sorted({e["klasse"].strip() for d in days for e in d["entries"] if e.get("klasse", "").strip()})
+        classes = sorted({entry["klasse"].strip() for day in days for entry in day["entries"] if entry.get("klasse", "").strip()})
+        _LOGGER.debug("Parsed KFG plan: weeks=%s days=%s entries=%s classes=%s", [w["week"] for w in weeks], len(days), sum(len(d["entries"]) for d in days), classes)
         return {"generated": datetime.now().astimezone().isoformat(), "today": today.isoformat(), "current_week": current_week, "next_week": next_week, "next_week_available": any(w["week"] == next_week for w in weeks), "classes": classes, "days": days, "weeks": weeks}
 
     @staticmethod
@@ -65,53 +68,73 @@ class KFGCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except (ClientError, TimeoutError) as err:
             _LOGGER.warning("Unable to fetch %s: %s", url, err)
             return None
+
         soup = BeautifulSoup(body, "html.parser")
         title = soup.title.get_text(" ", strip=True) if soup.title else ""
         if "Untis" not in title:
+            _LOGGER.warning("%s does not look like an Untis page", url)
             return None
-        days = []
+        week_match = re.search(r"Woche\s+([AB])", soup.get_text(" ", strip=True), re.IGNORECASE)
         anchors = soup.select('a[name="1"], a[name="2"], a[name="3"], a[name="4"], a[name="5"]')
+        days = []
         for anchor in anchors:
             number = int(anchor.get("name"))
-            text_parts = []
-            node = anchor
-            for _ in range(12):
-                node = node.next_sibling
-                if node is None: break
-                text = node.get_text(" ", strip=True) if hasattr(node, "get_text") else str(node).strip()
-                if text: text_parts.append(text)
-                if len(" ".join(text_parts)) > 50: break
-            header_text = " ".join(text_parts)
+            header_text = self._day_header_text(anchor)
             match = re.search(r"(\d{1,2}\.\d{1,2}\.)\s*([A-Za-zÄÖÜäöüß]+)", header_text)
             weekday = match.group(2) if match else ""
-            weekday_number = {"Montag":1,"Dienstag":2,"Mittwoch":3,"Donnerstag":4,"Freitag":5,"Monday":1,"Tuesday":2,"Wednesday":3,"Thursday":4,"Friday":5}.get(weekday, number)
+            weekday_number = WEEKDAYS.get(weekday, number)
             table = anchor.find_next("table", class_="subst")
             entries = []
             status = None
             if table:
-                for tr in table.find_all("tr"):
-                    cells = tr.find_all(["td", "th"])
+                for row in table.find_all("tr"):
+                    cells = row.find_all(["td", "th"])
                     values = [cell.get_text(" ", strip=True) for cell in cells]
-                    if len(values) == 1: status = values[0]
-                    elif len(values) >= 11 and values[0].lower() not in ("klasse(n)", "klasse"):
+                    if not values:
+                        continue
+                    if len(values) == 1:
+                        status = values[0]
+                    elif len(values) >= 11 and values[0].strip().lower() not in {"klasse(n)", "klasse"}:
                         entries.append(self._entry(cells[:11]))
-            news = []
-            news_heading = anchor.find_next(lambda tag: tag.name in ("b", "strong") and "Nachrichten zum Tag" in tag.get_text(" ", strip=True))
-            if news_heading:
-                news_table = news_heading.find_next("table")
-                if news_table:
-                    for tr in news_table.find_all("tr"):
-                        vals = [c.get_text(" ", strip=True) for c in tr.find_all(["td", "th"])]
-                        if vals: news.append(vals)
-            days.append({"weekday_number": weekday_number, "weekday": weekday, "date": match.group(1) if match else "", "news": news, "entries": entries, "status": status})
-        week_match = re.search(r"Woche\s+([AB])", soup.get_text(" ", strip=True), re.IGNORECASE)
+            days.append({"weekday_number": weekday_number, "weekday": weekday, "date": match.group(1) if match else "", "news": self._extract_news(anchor), "entries": entries, "status": status})
         return {"week": week, "week_type": f"Woche {week_match.group(1).upper()}" if week_match else "", "title": title, "url": url, "days": days}
+
+    @staticmethod
+    def _day_header_text(anchor) -> str:
+        parent = anchor.parent
+        if parent:
+            text = parent.get_text(" ", strip=True)
+            if re.search(r"\d{1,2}\.\d{1,2}\.\s*[A-Za-zÄÖÜäöüß]+", text):
+                return text
+        parts = []
+        node = anchor
+        for _ in range(12):
+            node = node.next_sibling
+            if node is None:
+                break
+            text = node.get_text(" ", strip=True) if hasattr(node, "get_text") else str(node).strip()
+            if text:
+                parts.append(text)
+            if re.search(r"\d{1,2}\.\d{1,2}\.\s*[A-Za-zÄÖÜäöüß]+", " ".join(parts)):
+                break
+        return " ".join(parts)
+
+    @staticmethod
+    def _extract_news(anchor) -> list[list[str]]:
+        heading = anchor.find_next(lambda tag: tag.name in ("b", "strong") and "Nachrichten zum Tag" in tag.get_text(" ", strip=True))
+        if heading is None:
+            return []
+        table = heading.find_next("table")
+        if table is None:
+            return []
+        return [[cell.get_text(" ", strip=True) for cell in row.find_all(["td", "th"])] for row in table.find_all("tr") if row.find_all(["td", "th"])]
 
     @staticmethod
     def _entry(cells) -> dict[str, Any]:
         values = [cell.get_text(" ", strip=True) for cell in cells]
         strike = {}
-        for index, key in ((3,"vertreter"),(4,"fach"),(5,"fach_original"),(7,"lehrer_original"),(8,"lehrer_nach"),(9,"art")):
+        for index, key in ((3, "vertreter"), (4, "fach"), (5, "fach_original"), (7, "lehrer_original"), (8, "lehrer_nach"), (9, "art")):
             struck = [node.get_text(" ", strip=True) for node in cells[index].find_all("strike")]
-            if struck: strike[key] = " ".join(struck)
-        return {"klasse":values[0],"datum":values[1],"stunde":values[2],"vertreter":values[3],"fach":values[4],"fach_original":values[5],"raum":values[6],"lehrer_original":values[7],"lehrer_nach":values[8],"art":values[9],"text":values[10],"strike":strike}
+            if struck:
+                strike[key] = " ".join(struck)
+        return {"klasse": values[0], "datum": values[1], "stunde": values[2], "vertreter": values[3], "fach": values[4], "fach_original": values[5], "raum": values[6], "lehrer_original": values[7], "lehrer_nach": values[8], "art": values[9], "text": values[10], "strike": strike}
