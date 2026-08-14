@@ -25,7 +25,6 @@
 ```yaml
 type: custom:kfg-vertretungsplan-card
 sensor: sensor.vertretungsplan
-selected_entity: input_text.vertretungsplan_klassen
 ```
 
 6. Karte speichern.
@@ -36,4 +35,4 @@ Die Karte ist Bestandteil der HACS-Integration. Beim Laden der Integration wird 
 
 ### Klassen auswählen
 
-Die Karte zeigt die vom Vertretungsplan erkannten Klassen als anklickbare Chips. Mehrere Klassen können gleichzeitig ausgewählt werden. Ohne Auswahl werden Vertretungen für alle Klassen angezeigt.
+Die Karte zeigt die vom Vertretungsplan erkannten Klassen als anklickbare Chips. Mehrere Klassen können gleichzeitig ausgewählt werden. Die Auswahl wird lokal im Browser gespeichert. Mit **Alle Klassen** wird die Auswahl zurückgesetzt.
