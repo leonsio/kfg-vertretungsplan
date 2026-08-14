@@ -151,6 +151,8 @@ class KFGCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return []
 
         candidate_tables = []
+        if heading.name == "table":
+            candidate_tables.append(heading)
         parent_table = heading.find_parent("table")
         if parent_table is not None:
             candidate_tables.append(parent_table)
