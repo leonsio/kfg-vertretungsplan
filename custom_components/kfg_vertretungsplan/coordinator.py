@@ -104,12 +104,10 @@ class KFGCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     @staticmethod
     def _decode_html(raw_body: bytes) -> str:
         """Decode Untis HTML, including legacy German encodings used by the school site."""
-        # UnicodeDammit detects HTML meta charset declarations and common legacy encodings.
         dammit = UnicodeDammit(raw_body, is_html=True)
         if dammit.unicode_markup:
             return dammit.unicode_markup
 
-        # The KFG Untis pages historically use Windows-1252/ISO-8859-1.
         for encoding in ("cp1252", "iso-8859-1", "utf-8"):
             try:
                 return raw_body.decode(encoding)
@@ -139,33 +137,58 @@ class KFGCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @staticmethod
     def _extract_news(anchor) -> list[list[str]]:
-        """Extract the day news table following the day's anchor.
-
-        Untis has used different markup for the news heading over time, so do not
-        require a specific tag such as <b> or <strong>. The heading text is the
-        stable part of the markup.
-        """
+        """Extract only actual day-news rows, never the substitution table."""
+        heading = None
         for node in anchor.find_all_next():
             if not getattr(node, "name", None):
                 continue
             text = node.get_text(" ", strip=True)
-            if not re.search(r"Nachrichten\s+(?:zum\s+)?Tag", text, re.IGNORECASE):
+            if re.search(r"Nachrichten\s+(?:zum\s+)?Tag", text, re.IGNORECASE):
+                heading = node
+                break
+
+        if heading is None:
+            return []
+
+        candidate_tables = []
+        parent_table = heading.find_parent("table")
+        if parent_table is not None:
+            candidate_tables.append(parent_table)
+        candidate_tables.extend(heading.find_all_next("table"))
+
+        seen = set()
+        for table in candidate_tables:
+            if id(table) in seen:
+                continue
+            seen.add(id(table))
+
+            # Never interpret the actual substitution table as news.
+            if "subst" in table.get("class", []):
                 continue
 
-            table = node.find_next("table")
-            if table is None:
-                continue
-
-            news: list[list[str]] = []
+            rows: list[list[str]] = []
             for row in table.find_all("tr"):
                 cells = [cell.get_text(" ", strip=True) for cell in row.find_all(["td", "th"])]
                 cells = [cell for cell in cells if cell]
-                if cells:
-                    news.append(cells)
-            if news:
-                _LOGGER.debug("Found %s news row(s) for day anchor %s", len(news), anchor.get("name"))
-                return news
-            return []
+                if not cells:
+                    continue
+
+                # "Nachrichten zum Tag" is a heading, not a news item. Omitting it
+                # prevents the dashboard from displaying the heading twice.
+                if len(cells) == 1 and re.fullmatch(r"Nachrichten\s+(?:zum\s+)?Tag", cells[0], re.IGNORECASE):
+                    continue
+
+                # Some Untis exports omit the subst CSS class. The column header is
+                # still a reliable way to reject the substitution table.
+                if cells[0].strip().lower() in {"klasse(n)", "klasse"}:
+                    rows = []
+                    break
+                rows.append(cells)
+
+            if rows:
+                _LOGGER.debug("Found %s news row(s) for day anchor %s", len(rows), anchor.get("name"))
+                return rows
+
         return []
 
     @staticmethod
