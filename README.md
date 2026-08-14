@@ -6,8 +6,6 @@ Die Integration ruft die schulweite `w00000.htm` für die aktuelle und nächste 
 
 ## Installation über HACS
 
-Die Integration kann direkt aus dem GitHub-Repository als **Benutzerdefiniertes Repository** installiert werden.
-
 1. Öffne in Home Assistant **HACS → Integrationen**.
 2. Öffne oben rechts das Menü **⋮**.
 3. Wähle **Benutzerdefinierte Repositories**.
@@ -17,42 +15,17 @@ Die Integration kann direkt aus dem GitHub-Repository als **Benutzerdefiniertes 
 
 5. Wähle als Typ **Integration**.
 6. Klicke auf **Hinzufügen**.
-7. Suche anschließend in HACS nach **KFG Vertretungsplan** und öffne den Eintrag.
-8. Klicke auf **Download** und installiere die aktuelle Version.
-9. Starte Home Assistant anschließend neu.
+7. Öffne in HACS den Eintrag **KFG Vertretungsplan**.
+8. Klicke auf **Download**.
+9. Starte Home Assistant neu.
 10. Öffne **Einstellungen → Geräte & Dienste → Integration hinzufügen** und suche nach **KFG Vertretungsplan**.
-11. Folge dem Einrichtungsdialog der Integration.
+11. Folge dem Einrichtungsdialog.
 
-HACS dokumentiert das Hinzufügen eines benutzerdefinierten Repositories über **⋮ → Benutzerdefinierte Repositories**, die Auswahl des Repository-Typs und anschließend **Hinzufügen**. Nach dem Download wird eine HACS-Integration unter `custom_components/` installiert.
+Die Lovelace-Karte ist Bestandteil der Integration. Nach der Installation wird die JavaScript-Datei automatisch aus der Integration bereitgestellt und von Home Assistant geladen. **Es ist kein Kopieren der Datei nach `/config/www` und keine manuelle Lovelace-Ressource erforderlich.** Home Assistant dokumentiert für Integrationen die Bereitstellung statischer Dateien über `async_register_static_paths`; die Integration nutzt diesen Mechanismus und lädt die Karte anschließend automatisch. citeturn3search1turn3search5
 
 ## Dashboard erstellen
 
-Die Integration stellt den Vertretungsplan über den Sensor `sensor.vertretungsplan` bereit. Für die komfortable Darstellung ist zusätzlich die mitgelieferte Lovelace-Karte `frontend/vertretungsplan-card.js` vorgesehen.
-
-### 1. Lovelace-Karte als Ressource einbinden
-
-Kopiere die Datei `frontend/vertretungsplan-card.js` aus diesem Repository in den Home-Assistant-Konfigurationsordner, z. B. nach:
-
-```text
-/config/www/kfg-vertretungsplan/vertretungsplan-card.js
-```
-
-Falls der Ordner `/config/www` noch nicht existiert, erstelle ihn.
-
-Öffne anschließend in Home Assistant:
-
-**Einstellungen → Dashboards → ⋮ → Ressourcen**
-
-und füge folgende Ressource hinzu:
-
-```text
-URL: /local/kfg-vertretungsplan/vertretungsplan-card.js
-Typ: JavaScript-Modul
-```
-
-Home Assistant stellt Dateien aus `/config/www` über `/local` bereit. Nach dem Hinzufügen oder Aktualisieren einer Ressource sollte die Oberfläche neu geladen werden.
-
-### 2. Dashboard anlegen
+### 1. Dashboard anlegen
 
 Öffne:
 
@@ -62,22 +35,27 @@ und erstelle beispielsweise ein Dashboard mit dem Namen:
 
 **Vertretungsplan**
 
-Öffne anschließend das neue Dashboard und wähle:
+### 2. Karte hinzufügen
+
+Öffne das neue Dashboard und wähle:
 
 **Karte hinzufügen → Manuell**
 
-Füge die Vertretungsplan-Karte mit folgender Konfiguration ein:
+Füge folgende Konfiguration ein:
 
 ```yaml
-type: custom:vertretungsplan-card
-entity: sensor.vertretungsplan
+type: custom:kfg-vertretungsplan-card
+sensor: sensor.vertretungsplan
+selected_entity: input_text.vertretungsplan_klassen
 ```
 
 Speichere die Karte.
 
+Nach der Installation der Integration sollte die Karte bereits als **KFG Vertretungsplan** verfügbar sein. Eine zusätzliche JavaScript-Ressource muss nicht angelegt werden.
+
 ### 3. Klassen auswählen
 
-Die Karte liest die verfügbaren Klassen aus den Daten des Vertretungsplan-Sensors. Mehrere Klassen können gleichzeitig ausgewählt werden.
+Die Karte liest die verfügbaren Klassen aus den Daten des Vertretungsplan-Sensors. Mehrere Klassen können gleichzeitig über die anklickbaren Klassen-Chips ausgewählt werden.
 
 Beispiel:
 
@@ -96,5 +74,5 @@ Der Sensor wird von der Integration automatisch aktualisiert. Das Dashboard verw
 ## Hinweise
 
 - Für HACS muss das Repository als **Integration** hinzugefügt werden.
-- Die Lovelace-Karte ist eine separate Frontend-Ressource und muss einmalig als Ressource registriert werden.
-- Bei Änderungen an der JavaScript-Karte kann ein vollständiges Neuladen des Browsers erforderlich sein.
+- Die Lovelace-Karte wird automatisch mit der Integration bereitgestellt.
+- Nach einem Update der Integration kann ein Neuladen des Browsers erforderlich sein, damit eine aktualisierte JavaScript-Karte geladen wird.
