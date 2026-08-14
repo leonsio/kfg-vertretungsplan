@@ -1,3 +1,2 @@
 type: custom:kfg-vertretungsplan-card
 sensor: sensor.vertretungsplan
-selected_entity: input_text.vertretungsplan_klassen
