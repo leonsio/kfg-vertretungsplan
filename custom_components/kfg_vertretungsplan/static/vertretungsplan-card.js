@@ -105,10 +105,23 @@ class KfgVertretungsplanCard extends HTMLElement {
   }
 }
 
-customElements.define("kfg-vertretungsplan-card", KfgVertretungsplanCard);
+// Register both names so dashboards created with either the current
+// documented name or the previous name continue to work.
+if (!customElements.get("kfg-vertretungsplan-card")) {
+  customElements.define("kfg-vertretungsplan-card", KfgVertretungsplanCard);
+}
+if (!customElements.get("vertretungsplan-card")) {
+  customElements.define("vertretungsplan-card", KfgVertretungsplanCard);
+}
+
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: "kfg-vertretungsplan-card",
   name: "KFG Vertretungsplan",
+  description: "Vertretungsplan mit Mehrfachauswahl von Klassen",
+});
+window.customCards.push({
+  type: "vertretungsplan-card",
+  name: "KFG Vertretungsplan (Legacy-Name)",
   description: "Vertretungsplan mit Mehrfachauswahl von Klassen",
 });
