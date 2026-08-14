@@ -35,7 +35,7 @@ async def _register_lovelace_resource(hass: HomeAssistant) -> None:
         if url.split("?", 1)[0] != CARD_URL:
             continue
 
-        if url != CARD_RESOURCE_URL or resource.get("type") != "module":
+        if url != CARD_RESOURCE_URL or resource.get("res_type") != "module":
             await resources.async_update_item(
                 resource["id"],
                 {"url": CARD_RESOURCE_URL, "res_type": "module"},
@@ -57,8 +57,6 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         [StaticPathConfig(f"/api/{DOMAIN}/static", str(static_dir), False)]
     )
 
-    # Load the card globally. This guarantees that the custom element exists
-    # even when a dashboard resource has not yet been refreshed.
     add_extra_js_url(hass, CARD_RESOURCE_URL)
 
     if hass.is_running:
