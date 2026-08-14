@@ -29,23 +29,25 @@ async def _register_lovelace_resource(hass: HomeAssistant) -> None:
         return
 
     await resources.async_load()
+    matched = False
 
-    for resource in resources.async_items():
+    for resource in list(resources.async_items()):
         url = resource.get("url", "")
         base_url = url.split("?", 1)[0]
         if base_url != CARD_URL and not base_url.endswith("/vertretungsplan-card.js"):
             continue
 
+        matched = True
         if url != CARD_RESOURCE_URL or resource.get("res_type") != "module":
             await resources.async_update_item(
                 resource["id"],
                 {"url": CARD_RESOURCE_URL, "res_type": "module"},
             )
-        return
 
-    await resources.async_create_item(
-        {"res_type": "module", "url": CARD_RESOURCE_URL}
-    )
+    if not matched:
+        await resources.async_create_item(
+            {"res_type": "module", "url": CARD_RESOURCE_URL}
+        )
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
