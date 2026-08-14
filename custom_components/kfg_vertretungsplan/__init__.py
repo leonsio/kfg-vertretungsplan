@@ -15,11 +15,10 @@ from .coordinator import KFGCoordinator
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 CARD_URL = f"/api/{DOMAIN}/static/vertretungsplan-card.js"
-CARD_RESOURCE_URL = f"{CARD_URL}?v=1.0.10"
 
 
 async def _register_lovelace_resource(hass: HomeAssistant) -> None:
-    """Register or update the custom card as a Lovelace module resource."""
+    """Register or normalize the custom card as a Lovelace module resource."""
     lovelace_data = hass.data.get(LOVELACE_DATA)
     if lovelace_data is None:
         return
@@ -38,15 +37,15 @@ async def _register_lovelace_resource(hass: HomeAssistant) -> None:
             continue
 
         matched = True
-        if url != CARD_RESOURCE_URL or resource.get("res_type") != "module":
+        if url != CARD_URL or resource.get("res_type") != "module":
             await resources.async_update_item(
                 resource["id"],
-                {"url": CARD_RESOURCE_URL, "res_type": "module"},
+                {"url": CARD_URL, "res_type": "module"},
             )
 
     if not matched:
         await resources.async_create_item(
-            {"res_type": "module", "url": CARD_RESOURCE_URL}
+            {"res_type": "module", "url": CARD_URL}
         )
 
 
@@ -57,7 +56,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         [StaticPathConfig(f"/api/{DOMAIN}/static", str(static_dir), False)]
     )
 
-    add_extra_js_url(hass, CARD_RESOURCE_URL)
+    add_extra_js_url(hass, CARD_URL)
 
     if hass.is_running:
         hass.async_create_task(_register_lovelace_resource(hass))
