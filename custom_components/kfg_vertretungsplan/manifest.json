@@ -1,7 +1,7 @@
 {
   "domain": "kfg_vertretungsplan",
   "name": "KFG Vertretungsplan",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "documentation": "https://github.com/leonsio/kfg-vertretungsplan",
   "issue_tracker": "https://github.com/leonsio/kfg-vertretungsplan/issues",
   "codeowners": ["@leonsio"],
