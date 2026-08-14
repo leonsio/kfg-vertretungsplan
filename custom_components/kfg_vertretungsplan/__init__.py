@@ -58,13 +58,16 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         [StaticPathConfig(f"/api/{DOMAIN}/static", str(static_dir), False)]
     )
 
-    # Lovelace's resource collection is guaranteed to be initialized after
-    # Home Assistant has started. Registering earlier can silently miss the
-    # storage collection on a fresh installation.
-    hass.bus.async_listen_once(
-        EVENT_HOMEASSISTANT_STARTED,
-        lambda _event: hass.async_create_task(_register_lovelace_resource(hass)),
-    )
+    if hass.is_running:
+        hass.async_create_task(_register_lovelace_resource(hass))
+    else:
+        # Lovelace's resource collection is guaranteed to be initialized after
+        # Home Assistant has started. Registering earlier can miss the storage
+        # collection on a fresh installation.
+        hass.bus.async_listen_once(
+            EVENT_HOMEASSISTANT_STARTED,
+            lambda _event: hass.async_create_task(_register_lovelace_resource(hass)),
+        )
     return True
 
 
