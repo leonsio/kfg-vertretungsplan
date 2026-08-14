@@ -1,36 +1,26 @@
-# Installation via HACS
+# Installation und Dashboard
 
-## 1. GitHub Repository
+## 1. Integration über HACS installieren
 
-Dieses Repository ist für HACS vorbereitet.
+1. In Home Assistant **HACS → Integrationen** öffnen.
+2. Oben rechts **⋮ → Benutzerdefinierte Repositories** wählen.
+3. Als Repository eintragen:
 
-## 2. HACS
+   `https://github.com/leonsio/kfg-vertretungsplan`
 
-1. HACS → Integrationen
-2. Menü `⋮` → Benutzerdefinierte Repositories
-3. `https://github.com/leonsio/kfg-vertretungsplan` eintragen
-4. Kategorie `Integration`
-5. Repository hinzufügen
-6. `KFG Vertretungsplan` installieren
-7. Home Assistant neu starten
+4. Als Kategorie **Integration** auswählen.
+5. **Hinzufügen** und anschließend **KFG Vertretungsplan** installieren.
+6. Home Assistant neu starten.
+7. **Einstellungen → Geräte & Dienste → Integration hinzufügen** öffnen und **KFG Vertretungsplan** auswählen.
+8. Den Einrichtungsdialog abschließen.
 
-## 3. Integration konfigurieren
+## 2. Dashboard erstellen
 
-Einstellungen → Geräte & Dienste → Integration hinzufügen → KFG Vertretungsplan.
-
-## 4. Dashboard-Karte
-
-Die Karte liegt unter `frontend/vertretungsplan-card.js`.
-
-Nach HACS-Installation kann sie nach `/config/www/kfg-vertretungsplan/vertretungsplan-card.js` kopiert werden.
-
-Dann als Lovelace-Ressource hinzufügen:
-
-`/local/kfg-vertretungsplan/vertretungsplan-card.js`
-
-Typ: `JavaScript-Modul`.
-
-Danach in einer manuellen YAML-Karte:
+1. **Einstellungen → Dashboards → Dashboard hinzufügen** öffnen.
+2. Ein Dashboard, z. B. **Vertretungsplan**, erstellen.
+3. Das neue Dashboard öffnen.
+4. **Karte hinzufügen → Manuell** auswählen.
+5. Folgende YAML-Konfiguration einfügen:
 
 ```yaml
 type: custom:kfg-vertretungsplan-card
@@ -38,13 +28,12 @@ sensor: sensor.vertretungsplan
 selected_entity: input_text.vertretungsplan_klassen
 ```
 
-Zusätzlich muss der Helper angelegt werden:
+6. Karte speichern.
 
-```yaml
-input_text:
-  vertretungsplan_klassen:
-    name: Ausgewählte Klassen
-    max: 255
-```
+### Keine manuelle JavaScript-Installation erforderlich
 
-Die Karte bietet anklickbare Klassen-Chips. Mehrere Klassen können gleichzeitig ausgewählt werden.
+Die Karte ist Bestandteil der HACS-Integration. Beim Laden der Integration wird sie automatisch über den Home-Assistant-HTTP-Server bereitgestellt und als zusätzliches Frontend-JavaScript geladen. Es muss daher weder eine Datei nach `/config/www` kopiert noch eine Lovelace-Ressource manuell angelegt werden.
+
+### Klassen auswählen
+
+Die Karte zeigt die vom Vertretungsplan erkannten Klassen als anklickbare Chips. Mehrere Klassen können gleichzeitig ausgewählt werden. Ohne Auswahl werden Vertretungen für alle Klassen angezeigt.
