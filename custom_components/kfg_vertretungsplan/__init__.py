@@ -15,7 +15,7 @@ from .coordinator import KFGCoordinator
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 CARD_URL = f"/api/{DOMAIN}/static/vertretungsplan-card.js"
-CARD_RESOURCE_URL = f"{CARD_URL}?v=1.0.7"
+CARD_RESOURCE_URL = f"{CARD_URL}?v=1.0.8"
 
 
 async def _register_lovelace_resource(hass: HomeAssistant) -> None:
