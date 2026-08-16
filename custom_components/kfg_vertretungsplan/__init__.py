@@ -61,10 +61,10 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     if hass.is_running:
         hass.async_create_task(_register_lovelace_resource(hass))
     else:
-        hass.bus.async_listen_once(
-            EVENT_HOMEASSISTANT_STARTED,
-            lambda _event: hass.async_create_task(_register_lovelace_resource(hass)),
-        )
+        async def _on_started(_event):
+            await _register_lovelace_resource(hass)
+
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _on_started)
     return True
 
 
