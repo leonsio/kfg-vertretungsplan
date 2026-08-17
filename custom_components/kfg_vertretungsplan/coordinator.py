@@ -98,7 +98,9 @@ class KFGCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         status = values[0]
                     elif len(values) >= 11 and values[0].strip().lower() not in {"klasse(n)", "klasse"}:
                         entries.append(self._entry(cells[:11]))
-            days.append({"weekday_number": weekday_number, "weekday": weekday, "date": match.group(1) if match else "", "news": self._extract_news(anchor), "entries": entries, "status": status})
+            news = self._extract_news(anchor)
+            _LOGGER.debug("Untis week %s day %s %s: entries=%d news=%d status=%s", week, number, match.group(1) if match else "?", len(entries), len(news), status)
+            days.append({"weekday_number": weekday_number, "weekday": weekday, "date": match.group(1) if match else "", "news": news, "entries": entries, "status": status})
         return {"week": week, "week_type": f"Woche {week_match.group(1).upper()}" if week_match else "", "title": title, "url": url, "days": days}
 
     @staticmethod
@@ -137,61 +139,46 @@ class KFGCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @staticmethod
     def _extract_news(anchor) -> list[list[str]]:
-        """Extract only actual day-news rows, never the substitution table."""
+        """Extract news only from the current day section.
+
+        Untis places the day sections consecutively. The previous implementation
+        searched the whole remainder of the document, so a day without its own
+        news table could inherit the next day's message. In particular Monday
+        17.8. incorrectly received Tuesday's message.
+        """
+        next_anchor = anchor.find_next("a", attrs={"name": re.compile(r"^[1-5]$")})
         heading = None
+
         for node in anchor.find_all_next():
+            if next_anchor is not None and node is next_anchor:
+                break
             if not getattr(node, "name", None):
                 continue
             text = node.get_text(" ", strip=True)
-            if re.search(r"Nachrichten\s+(?:zum\s+)?Tag", text, re.IGNORECASE):
+            if re.fullmatch(r"Nachrichten\s+(?:zum\s+)?Tag", text, re.IGNORECASE):
                 heading = node
                 break
 
         if heading is None:
             return []
 
-        candidate_tables = []
-        if heading.name == "table":
-            candidate_tables.append(heading)
-        parent_table = heading.find_parent("table")
-        if parent_table is not None:
-            candidate_tables.append(parent_table)
-        candidate_tables.extend(heading.find_all_next("table"))
+        table = heading.find_parent("table")
+        if table is None or "subst" in table.get("class", []):
+            return []
 
-        seen = set()
-        for table in candidate_tables:
-            if id(table) in seen:
+        rows: list[list[str]] = []
+        for row in table.find_all("tr"):
+            cells = [cell.get_text(" ", strip=True) for cell in row.find_all(["td", "th"])]
+            cells = [cell for cell in cells if cell]
+            if not cells:
                 continue
-            seen.add(id(table))
-
-            # Never interpret the actual substitution table as news.
-            if "subst" in table.get("class", []):
+            if len(cells) == 1 and re.fullmatch(r"Nachrichten\s+(?:zum\s+)?Tag", cells[0], re.IGNORECASE):
                 continue
+            if cells[0].strip().lower() in {"klasse(n)", "klasse"}:
+                return []
+            rows.append(cells)
 
-            rows: list[list[str]] = []
-            for row in table.find_all("tr"):
-                cells = [cell.get_text(" ", strip=True) for cell in row.find_all(["td", "th"])]
-                cells = [cell for cell in cells if cell]
-                if not cells:
-                    continue
-
-                # "Nachrichten zum Tag" is a heading, not a news item. Omitting it
-                # prevents the dashboard from displaying the heading twice.
-                if len(cells) == 1 and re.fullmatch(r"Nachrichten\s+(?:zum\s+)?Tag", cells[0], re.IGNORECASE):
-                    continue
-
-                # Some Untis exports omit the subst CSS class. The column header is
-                # still a reliable way to reject the substitution table.
-                if cells[0].strip().lower() in {"klasse(n)", "klasse"}:
-                    rows = []
-                    break
-                rows.append(cells)
-
-            if rows:
-                _LOGGER.debug("Found %s news row(s) for day anchor %s", len(rows), anchor.get("name"))
-                return rows
-
-        return []
+        return rows
 
     @staticmethod
     def _entry(cells) -> dict[str, Any]:
