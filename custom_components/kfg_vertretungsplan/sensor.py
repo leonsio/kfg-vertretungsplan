@@ -49,7 +49,7 @@ class KFGKollegiumSensor(CoordinatorEntity[KFGCoordinator], SensorEntity):
     """Expose the school's current teacher abbreviation/name directory."""
 
     _attr_has_entity_name = True
-    _attr_name = "Kollegium"
+    _attr_name = "KFG Kollegium"
     _attr_icon = "mdi:account-school"
 
     def __init__(self, coordinator, entry):
