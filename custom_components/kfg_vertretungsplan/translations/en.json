@@ -3,5 +3,14 @@
     "step": {"user": {"title": "KFG Timetable Substitution Plan", "description": "Configure the base URL and refresh interval.", "data": {"base_url": "Base URL", "scan_interval": "Refresh interval (seconds)"}}},
     "error": {"invalid_url": "Enter a valid HTTP or HTTPS URL."},
     "abort": {"single_instance_allowed": "The integration is already configured."}
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "KFG Timetable Substitution Plan – Settings",
+        "description": "Change the refresh interval after installation. The change is applied immediately.",
+        "data": {"scan_interval": "Refresh interval (seconds)"}
+      }
+    }
   }
 }
