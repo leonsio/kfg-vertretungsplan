@@ -10,7 +10,7 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 
-from .const import DOMAIN, PLATFORMS
+from .const import CONF_SCAN_INTERVAL, DOMAIN, PLATFORMS
 from .coordinator import KFGCoordinator
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
@@ -22,31 +22,24 @@ async def _register_lovelace_resource(hass: HomeAssistant) -> None:
     lovelace_data = hass.data.get(LOVELACE_DATA)
     if lovelace_data is None:
         return
-
     resources = lovelace_data.resources
     if not hasattr(resources, "async_create_item"):
         return
-
     await resources.async_load()
     matched = False
-
     for resource in list(resources.async_items()):
         url = resource.get("url", "")
         base_url = url.split("?", 1)[0]
         if base_url != CARD_URL and not base_url.endswith("/vertretungsplan-card.js"):
             continue
-
         matched = True
         if url != CARD_URL or resource.get("res_type") != "module":
             await resources.async_update_item(
                 resource["id"],
                 {"url": CARD_URL, "res_type": "module"},
             )
-
     if not matched:
-        await resources.async_create_item(
-            {"res_type": "module", "url": CARD_URL}
-        )
+        await resources.async_create_item({"res_type": "module", "url": CARD_URL})
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -55,27 +48,33 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     await hass.http.async_register_static_paths(
         [StaticPathConfig(f"/api/{DOMAIN}/static", str(static_dir), False)]
     )
-
     add_extra_js_url(hass, CARD_URL)
-
     if hass.is_running:
         hass.async_create_task(_register_lovelace_resource(hass))
     else:
         async def _on_started(_event):
             await _register_lovelace_resource(hass)
-
         hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _on_started)
     return True
+
+
+async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload the integration so changed polling options take effect."""
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = KFGCoordinator(
         hass,
         base_url=entry.data["base_url"],
-        scan_interval=entry.options.get("scan_interval", entry.data["scan_interval"]),
+        scan_interval=entry.options.get(
+            CONF_SCAN_INTERVAL,
+            entry.data.get(CONF_SCAN_INTERVAL),
+        ),
     )
     await coordinator.async_config_entry_first_refresh()
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
