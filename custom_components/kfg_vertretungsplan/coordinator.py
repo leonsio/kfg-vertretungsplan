@@ -15,6 +15,8 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 WEEKDAYS = {"Montag": 1, "Dienstag": 2, "Mittwoch": 3, "Donnerstag": 4, "Freitag": 5, "Monday": 1, "Tuesday": 2, "Wednesday": 3, "Thursday": 4, "Friday": 5}
+KOLLEGIUM_URL = "https://www.kaiserin-friedrich.de/schule/kollegium/"
+KOLLEGIUM_UPDATE_INTERVAL = timedelta(hours=24)
 
 
 class KFGCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -22,6 +24,8 @@ class KFGCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def __init__(self, hass, base_url: str, scan_interval: int) -> None:
         self.base_url = base_url.rstrip("/")
+        self._colleagues: dict[str, str] = {}
+        self._colleagues_updated: datetime | None = None
         super().__init__(hass, logger=_LOGGER, name=DOMAIN, update_interval=timedelta(seconds=scan_interval))
 
     async def _async_update_data(self) -> dict[str, Any]:
@@ -31,6 +35,9 @@ class KFGCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         weeks = [parsed for week in (current_week, next_week) if (parsed := await self._fetch_week(week)) is not None]
         if not weeks:
             raise UpdateFailed("Kein Vertretungsplan konnte geladen werden.")
+
+        if self._colleagues_updated is None or datetime.now().astimezone() - self._colleagues_updated >= KOLLEGIUM_UPDATE_INTERVAL:
+            await self._update_colleagues()
 
         days = []
         for week_data in weeks:
@@ -44,7 +51,52 @@ class KFGCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         days.sort(key=lambda item: item["iso_date"])
         classes = sorted({entry["klasse"].strip() for day in days for entry in day["entries"] if entry.get("klasse", "").strip()})
         _LOGGER.debug("Parsed KFG plan: weeks=%s days=%s entries=%s classes=%s", [w["week"] for w in weeks], len(days), sum(len(d["entries"]) for d in days), classes)
-        return {"generated": datetime.now().astimezone().isoformat(), "today": today.isoformat(), "current_week": current_week, "next_week": next_week, "next_week_available": any(w["week"] == next_week for w in weeks), "classes": classes, "days": days, "weeks": weeks}
+        return {
+            "generated": datetime.now().astimezone().isoformat(),
+            "today": today.isoformat(),
+            "current_week": current_week,
+            "next_week": next_week,
+            "next_week_available": any(w["week"] == next_week for w in weeks),
+            "classes": classes,
+            "days": days,
+            "weeks": weeks,
+            "colleagues": self._colleagues,
+            "colleagues_updated": self._colleagues_updated.isoformat() if self._colleagues_updated else None,
+        }
+
+    async def _update_colleagues(self) -> None:
+        """Refresh the abbreviation -> teacher-name mapping once per day."""
+        session = async_get_clientsession(self.hass)
+        try:
+            async with session.get(KOLLEGIUM_URL, timeout=20, headers={"User-Agent": "HomeAssistant-KFG-Vertretungsplan/1.0"}) as response:
+                if response.status != 200:
+                    _LOGGER.warning("KFG Kollegium returned HTTP %s", response.status)
+                    return
+                raw_body = await response.read()
+        except (ClientError, TimeoutError) as err:
+            _LOGGER.warning("Unable to fetch KFG Kollegium: %s", err)
+            return
+
+        body = self._decode_html(raw_body)
+        soup = BeautifulSoup(body, "html.parser")
+        colleagues: dict[str, str] = {}
+        for table in soup.find_all("table"):
+            for row in table.find_all("tr"):
+                cells = row.find_all(["td", "th"])
+                if len(cells) < 2:
+                    continue
+                abbreviation = cells[0].get_text(" ", strip=True).upper()
+                name = cells[1].get_text(" ", strip=True)
+                if re.fullmatch(r"[A-ZÄÖÜẞ]{1,4}", abbreviation) and name and name.lower() not in {"lehrer und lehrerinnen", "lehrer", "lehrerin"}:
+                    colleagues[abbreviation] = name
+
+        if not colleagues:
+            _LOGGER.warning("KFG Kollegium page contained no teacher mappings")
+            return
+
+        self._colleagues = dict(sorted(colleagues.items()))
+        self._colleagues_updated = datetime.now().astimezone()
+        _LOGGER.info("Updated KFG Kollegium: %d teacher mappings", len(self._colleagues))
 
     @staticmethod
     def _date_for_weekday(today: date, week: int, weekday: int) -> date | None:
@@ -139,13 +191,7 @@ class KFGCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @staticmethod
     def _extract_news(anchor) -> list[list[str]]:
-        """Extract news only from the current day section.
-
-        Untis places the day sections consecutively. The previous implementation
-        searched the whole remainder of the document, so a day without its own
-        news table could inherit the next day's message. In particular Monday
-        17.8. incorrectly received Tuesday's message.
-        """
+        """Extract news only from the current day section."""
         next_anchor = anchor.find_next("a", attrs={"name": re.compile(r"^[1-5]$")})
         heading = None
 
