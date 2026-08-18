@@ -1,8 +1,21 @@
 from __future__ import annotations
+
 from urllib.parse import urlparse
+
 import voluptuous as vol
 from homeassistant import config_entries
-from .const import CONF_BASE_URL, CONF_SCAN_INTERVAL, DEFAULT_BASE_URL, DEFAULT_SCAN_INTERVAL, DOMAIN
+from homeassistant.core import callback
+
+from .const import (
+    CONF_BASE_URL,
+    CONF_SCAN_INTERVAL,
+    DEFAULT_BASE_URL,
+    DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+)
+
+SCAN_INTERVAL_SCHEMA = vol.All(vol.Coerce(int), vol.Range(min=60, max=3600))
+
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
@@ -17,8 +30,52 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if parsed.scheme not in ("http", "https") or not parsed.netloc:
                 errors[CONF_BASE_URL] = "invalid_url"
             else:
-                return self.async_create_entry(title="KFG Vertretungsplan", data={CONF_BASE_URL: base_url, CONF_SCAN_INTERVAL: user_input[CONF_SCAN_INTERVAL]})
-        return self.async_show_form(step_id="user", data_schema=vol.Schema({vol.Required(CONF_BASE_URL, default=DEFAULT_BASE_URL): str, vol.Required(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): vol.All(vol.Coerce(int), vol.Range(min=60, max=3600))}), errors=errors)
+                return self.async_create_entry(
+                    title="KFG Vertretungsplan",
+                    data={
+                        CONF_BASE_URL: base_url,
+                        CONF_SCAN_INTERVAL: user_input[CONF_SCAN_INTERVAL],
+                    },
+                )
+        return self.async_show_form(
+            step_id="user",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_BASE_URL, default=DEFAULT_BASE_URL): str,
+                    vol.Required(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): SCAN_INTERVAL_SCHEMA,
+                }
+            ),
+            errors=errors,
+        )
 
     async def async_step_import(self, user_input):
         return await self.async_step_user(user_input)
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry):
+        return KFGOptionsFlowHandler(config_entry)
+
+
+class KFGOptionsFlowHandler(config_entries.OptionsFlow):
+    """Allow the polling interval to be changed after installation."""
+
+    def __init__(self, config_entry) -> None:
+        self.config_entry = config_entry
+
+    async def async_step_init(self, user_input=None):
+        if user_input is not None:
+            return self.async_create_entry(data=user_input)
+
+        current_interval = self.config_entry.options.get(
+            CONF_SCAN_INTERVAL,
+            self.config_entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
+        )
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_SCAN_INTERVAL, default=current_interval): SCAN_INTERVAL_SCHEMA,
+                }
+            ),
+        )
