@@ -51,9 +51,28 @@ class KfgVertretungsplanCard extends HTMLElement {
 
     const classBlock = showClassFilter ? `<div class="section"><div class="section-title">Klassen</div>${fixed ? `<div class="fixed">Fest konfiguriert: <strong>${configuredClasses.map(this._escape).join(', ')}</strong></div>` : ''}<div class="classes"><button class="${selected.size === 0 ? 'selected' : ''}" data-all>Alle Klassen</button>${filterClasses.map(c => `<button class="${selected.has(c) ? 'selected' : ''}" data-class="${this._escape(c)}">${this._escape(c)}</button>`).join('')}</div></div>` : '';
 
+    // Preserve each horizontal scroll position across Home Assistant state updates.
+    // Replacing the shadow DOM recreates .table-wrap and resets scrollLeft on Safari.
+    const scrollPositions = new Map();
+    this.shadowRoot.querySelectorAll('.table-wrap[data-scroll-key]').forEach(wrap => {
+      scrollPositions.set(wrap.dataset.scrollKey, wrap.scrollLeft);
+    });
+
     this.shadowRoot.innerHTML = `<style>
       :host{display:block}ha-card{overflow:hidden}.header{padding:18px 20px 12px}.title{font-size:1.4rem;font-weight:600}.subtitle{margin-top:5px;color:var(--secondary-text-color);font-size:.9rem}.section{padding:0 16px 14px}.section-title{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--secondary-text-color);margin:10px 4px 8px}.classes{display:flex;flex-wrap:wrap;gap:7px}button{border:1px solid var(--divider-color);background:var(--card-background-color);color:var(--primary-text-color);border-radius:18px;padding:7px 12px;cursor:pointer;font:inherit;font-size:.88rem}button.selected{background:var(--primary-color);color:var(--text-primary-color);border-color:var(--primary-color)}.fixed{color:var(--secondary-text-color);font-size:.82rem;margin:4px}.day{margin:10px 0 16px;border:1px solid var(--divider-color);border-radius:12px;overflow:hidden}.day-header{padding:11px 13px;background:var(--secondary-background-color);display:flex;align-items:center;gap:10px}.day-heading{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.day-name,.day-date{font-weight:700}.week-type{font-weight:800;margin-left:3px}.week-a{color:var(--primary-color)}.week-b{color:var(--accent-color,var(--primary-color))}.news{margin:10px;padding:10px 12px;border-radius:9px;background:var(--secondary-background-color);border-left:4px solid var(--primary-color)}.news-title{font-weight:700;margin-bottom:4px}.news p{margin:3px 0}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:.88rem}th{text-align:left;color:var(--secondary-text-color);font-weight:600;font-size:.75rem;padding:8px 10px;border-bottom:1px solid var(--divider-color);white-space:nowrap}td{padding:9px 10px;border-bottom:1px solid var(--divider-color);vertical-align:top}tr:last-child td{border-bottom:0}tr.art-entfall{background:rgba(244,67,54,.10)}tr.art-vertretung{background:rgba(33,150,243,.08)}tr.art-betreuung{background:rgba(76,175,80,.10)}tr.art-tausch{background:rgba(255,152,0,.11)}tr.art-raumänderung{background:rgba(156,39,176,.09)}.klasse{font-weight:700;white-space:nowrap}.lesson{white-space:nowrap;font-weight:700}.art{white-space:nowrap;font-weight:600}.empty{padding:18px;color:var(--secondary-text-color);text-align:center}@media(max-width:700px){th:nth-child(4),td:nth-child(4){display:none}th,td{padding:8px 7px}}
     </style><ha-card><div class="header"><div class="title">Vertretungsplan</div></div>${classBlock}<div class="section">${days.map(day => this._renderDay(day, singleFixedClass, teachers)).join('') || '<div class="empty">Keine Vertretungen für die ausgewählten Klassen vorhanden.</div>'}</div></ha-card>`;
+
+    // Restore after the DOM has been laid out. requestAnimationFrame is important
+    // for Safari because scrollWidth/clientWidth are not final immediately after
+    // replacing the shadow DOM.
+    if (scrollPositions.size) {
+      requestAnimationFrame(() => {
+        this.shadowRoot.querySelectorAll('.table-wrap[data-scroll-key]').forEach(wrap => {
+          const previous = scrollPositions.get(wrap.dataset.scrollKey);
+          if (previous !== undefined) wrap.scrollLeft = previous;
+        });
+      });
+    }
 
     if (showClassFilter) {
       this.shadowRoot.querySelector('[data-all]')?.addEventListener('click', () => {
@@ -79,7 +98,8 @@ class KfgVertretungsplanCard extends HTMLElement {
     const news = (day.news || []).map(n => this._newsText(n)).map(String).map(n => n.trim()).filter(Boolean);
     const weekClass = String(day.weekType || '').toLowerCase().includes('b') ? 'week-b' : 'week-a';
     const classHeader = singleFixedClass ? '' : '<th>Klasse</th>';
-    return `<div class="day"><div class="day-header"><div class="day-heading"><span class="day-name">${this._escape(day.weekday || '')}</span><span class="day-date">${this._escape(day.date || '')}</span><span class="week-type ${weekClass}">${this._escape(day.weekType || '')}</span></div></div>${news.length ? `<div class="news"><div class="news-title">Nachricht des Tages</div>${news.map(n => `<p>${this._escape(n)}</p>`).join('')}</div>` : ''}${entries.length ? `<div class="table-wrap"><table><thead><tr>${classHeader}<th>Stunde</th><th>Fach</th><th>Lehrer</th><th>Vertretung</th><th>Raum</th><th>Art</th></tr></thead><tbody>${entries.map(e => this._renderEntry(e, singleFixedClass, teachers)).join('')}</tbody></table></div>` : `<div class="empty">Keine Vertretungen</div>`}</div>`;
+    const scrollKey = `${day.week}-${day.date}`;
+    return `<div class="day"><div class="day-header"><div class="day-heading"><span class="day-name">${this._escape(day.weekday || '')}</span><span class="day-date">${this._escape(day.date || '')}</span><span class="week-type ${weekClass}">${this._escape(day.weekType || '')}</span></div></div>${news.length ? `<div class="news"><div class="news-title">Nachricht des Tages</div>${news.map(n => `<p>${this._escape(n)}</p>`).join('')}</div>` : ''}${entries.length ? `<div class="table-wrap" data-scroll-key="${this._escape(scrollKey)}"><table><thead><tr>${classHeader}<th>Stunde</th><th>Fach</th><th>Lehrer</th><th>Vertretung</th><th>Raum</th><th>Art</th></tr></thead><tbody>${entries.map(e => this._renderEntry(e, singleFixedClass, teachers)).join('')}</tbody></table></div>` : `<div class="empty">Keine Vertretungen</div>`}</div>`;
   }
 
   _renderEntry(e, singleFixedClass, teachers) {
