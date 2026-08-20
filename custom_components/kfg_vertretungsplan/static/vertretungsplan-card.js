@@ -122,5 +122,8 @@ class KfgVertretungsplanCard extends HTMLElement {
   _escape(value){return String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 }
 
-if(!customElements.get(CARD_NAME))customElements.define(CARD_NAME,KfgVertretungsplanCard);
-if(!customElements.get('vertretungsplan-card'))customElements.define('vertretungsplan-card',KfgVertretungsplanCard);
+// Register the constructor exactly once. A CustomElementRegistry does not allow
+// the same constructor to be registered under two different element names.
+// The previous alias registration of `vertretungsplan-card` caused Edge to throw:
+// "this constructor has already been used with this registry".
+if (!customElements.get(CARD_NAME)) customElements.define(CARD_NAME, KfgVertretungsplanCard);
