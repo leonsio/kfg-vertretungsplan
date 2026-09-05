@@ -64,6 +64,19 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     return True
 
 
+def _migrate_kollegium_entity(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Keep the old sensor.kfg_kollegium entity when upgrading from 1.0.x."""
+    registry = er.async_get(hass)
+    old_unique_id = f"{entry.entry_id}_kollegium"
+    old_entity_id = registry.async_get_entity_id("sensor", DOMAIN, old_unique_id)
+    global_entity_id = registry.async_get_entity_id("sensor", DOMAIN, "kfg_vertretungsplan_kollegium")
+    if old_entity_id and not global_entity_id:
+        registry.async_update_entity(
+            old_entity_id,
+            new_unique_id="kfg_vertretungsplan_kollegium",
+        )
+
+
 async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Rename class entities if needed and reload changed options."""
     class_name = str(entry.options.get(CONF_CLASS, entry.data.get(CONF_CLASS, "alle"))).strip() or "alle"
@@ -91,6 +104,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     domain_data = hass.data.setdefault(DOMAIN, {})
     if "kollegium_owner" not in domain_data:
         domain_data["kollegium_owner"] = entry.entry_id
+        _migrate_kollegium_entity(hass, entry)
 
     coordinator = KFGCoordinator(
         hass,
@@ -121,5 +135,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             ]
             if remaining:
                 domain_data["kollegium_owner"] = remaining[0]
-                hass.async_create_task(hass.config_entries.async_reload(remaining[0]))
+                if hass.is_running:
+                    hass.async_create_task(hass.config_entries.async_reload(remaining[0]))
     return ok
