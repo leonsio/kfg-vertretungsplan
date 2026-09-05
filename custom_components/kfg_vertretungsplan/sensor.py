@@ -16,9 +16,12 @@ def _slug(value: str) -> str:
 
 
 def _entry_matches_class(entry: dict[str, Any], class_name: str) -> bool:
+    normalized = class_name.strip().lower()
+    if normalized in {"alle", "all", "*"}:
+        return True
     raw = str(entry.get("klasse", ""))
     classes = [item.strip().lower() for item in raw.replace("(", "").replace(")", "").split(",") if item.strip()]
-    return class_name.strip().lower() in classes
+    return normalized in classes
 
 
 def _filtered_data(data: dict[str, Any], class_name: str) -> dict[str, Any]:
@@ -33,6 +36,7 @@ def _filtered_data(data: dict[str, Any], class_name: str) -> dict[str, Any]:
         week_copy["days"] = days
         weeks.append(week_copy)
 
+    is_all = class_name.strip().lower() in {"alle", "all", "*"}
     return {
         "generated": data.get("generated"),
         "today": data.get("today"),
@@ -40,20 +44,19 @@ def _filtered_data(data: dict[str, Any], class_name: str) -> dict[str, Any]:
         "next_week": data.get("next_week"),
         "next_week_available": data.get("next_week_available", False),
         "class": class_name,
-        "classes": [class_name],
+        "classes": data.get("classes", []) if is_all else [class_name],
         "weeks": weeks,
     }
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
     coordinator: KFGCoordinator = hass.data[DOMAIN][entry.entry_id]
-    class_name = entry.options.get(CONF_CLASS, entry.data.get(CONF_CLASS, ""))
+    class_name = entry.options.get(CONF_CLASS, entry.data.get(CONF_CLASS, "alle")) or "alle"
     entities = [
         KFGClassSensor(coordinator, entry, class_name),
         KFGClassJsonSensor(coordinator, entry, class_name),
     ]
 
-    # The Kollegium sensor is global. Only the designated owner entry creates it.
     if hass.data[DOMAIN].get("kollegium_owner") == entry.entry_id:
         entities.append(KFGKollegiumSensor(coordinator))
 
@@ -67,7 +70,7 @@ class KFGClassSensor(CoordinatorEntity[KFGCoordinator], SensorEntity):
     def __init__(self, coordinator, entry, class_name: str):
         super().__init__(coordinator)
         self.class_name = class_name
-        suffix = _slug(class_name)
+        suffix = _slug(class_name) or "alle"
         self._attr_unique_id = f"{entry.entry_id}_data"
         self._attr_name = f"Vertretungsplan {class_name}"
         self._attr_suggested_object_id = f"vertretungsplan_{suffix}"
@@ -82,12 +85,7 @@ class KFGClassSensor(CoordinatorEntity[KFGCoordinator], SensorEntity):
 
 
 class KFGClassJsonSensor(CoordinatorEntity[KFGCoordinator], SensorEntity):
-    """Expose the class-specific plan as compact JSON in an attribute.
-
-    Home Assistant sensor states are limited in length, therefore the JSON
-    payload is stored in the `json` attribute while the state is the generation
-    timestamp.
-    """
+    """Expose the class-specific plan as compact JSON in an attribute."""
 
     _attr_has_entity_name = False
     _attr_icon = "mdi:code-json"
@@ -95,7 +93,7 @@ class KFGClassJsonSensor(CoordinatorEntity[KFGCoordinator], SensorEntity):
     def __init__(self, coordinator, entry, class_name: str):
         super().__init__(coordinator)
         self.class_name = class_name
-        suffix = _slug(class_name)
+        suffix = _slug(class_name) or "alle"
         self._attr_unique_id = f"{entry.entry_id}_json"
         self._attr_name = f"Vertretungsplan {class_name} JSON"
         self._attr_suggested_object_id = f"vertretungsplan_{suffix}_json"
