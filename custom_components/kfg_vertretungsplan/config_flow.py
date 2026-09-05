@@ -8,6 +8,7 @@ from homeassistant.core import callback
 
 from .const import (
     CONF_BASE_URL,
+    CONF_CLASS,
     CONF_SCAN_INTERVAL,
     DEFAULT_BASE_URL,
     DEFAULT_SCAN_INTERVAL,
@@ -15,32 +16,37 @@ from .const import (
 )
 
 SCAN_INTERVAL_SCHEMA = vol.All(vol.Coerce(int), vol.Range(min=60, max=3600))
+CLASS_SCHEMA = vol.All(str, lambda value: value.strip(), vol.Length(min=1, max=32))
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    VERSION = 1
+    VERSION = 2
 
     async def async_step_user(self, user_input=None):
-        if self._async_current_entries():
-            return self.async_abort(reason="single_instance_allowed")
         errors = {}
         if user_input is not None:
             base_url = user_input[CONF_BASE_URL].strip().rstrip("/")
+            class_name = user_input[CONF_CLASS].strip()
             parsed = urlparse(base_url)
             if parsed.scheme not in ("http", "https") or not parsed.netloc:
                 errors[CONF_BASE_URL] = "invalid_url"
             else:
+                await self.async_set_unique_id(class_name.lower())
+                self._abort_if_unique_id_configured()
                 return self.async_create_entry(
-                    title="KFG Vertretungsplan",
+                    title=f"KFG Vertretungsplan {class_name}",
                     data={
                         CONF_BASE_URL: base_url,
+                        CONF_CLASS: class_name,
                         CONF_SCAN_INTERVAL: user_input[CONF_SCAN_INTERVAL],
                     },
                 )
+
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(
                 {
+                    vol.Required(CONF_CLASS): CLASS_SCHEMA,
                     vol.Required(CONF_BASE_URL, default=DEFAULT_BASE_URL): str,
                     vol.Required(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): SCAN_INTERVAL_SCHEMA,
                 }
@@ -58,24 +64,49 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class KFGOptionsFlowHandler(config_entries.OptionsFlow):
-    """Allow the polling interval to be changed after installation."""
+    """Allow class and polling interval to be changed after installation."""
 
     def __init__(self, config_entry) -> None:
         self.config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
         if user_input is not None:
+            class_name = user_input[CONF_CLASS].strip()
+            for other in self.hass.config_entries.async_entries(DOMAIN):
+                if other.entry_id == self.config_entry.entry_id:
+                    continue
+                other_class = other.options.get(CONF_CLASS, other.data.get(CONF_CLASS, ""))
+                if str(other_class).strip().lower() == class_name.lower():
+                    return self.async_show_form(
+                        step_id="init",
+                        data_schema=self._schema(user_input),
+                        errors={CONF_CLASS: "class_already_configured"},
+                    )
             return self.async_create_entry(data=user_input)
 
+        current_class = self.config_entry.options.get(
+            CONF_CLASS,
+            self.config_entry.data.get(CONF_CLASS, ""),
+        )
         current_interval = self.config_entry.options.get(
             CONF_SCAN_INTERVAL,
             self.config_entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
         )
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_SCAN_INTERVAL, default=current_interval): SCAN_INTERVAL_SCHEMA,
-                }
+            data_schema=self._schema(
+                {CONF_CLASS: current_class, CONF_SCAN_INTERVAL: current_interval}
             ),
+        )
+
+    @staticmethod
+    def _schema(values):
+        return vol.Schema(
+            {
+                vol.Required(CONF_CLASS, default=values.get(CONF_CLASS, "")): CLASS_SCHEMA,
+                vol.Required(
+                    CONF_SCAN_INTERVAL,
+                    default=values.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
+                ): SCAN_INTERVAL_SCHEMA,
+            }
         )
