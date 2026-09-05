@@ -12,7 +12,9 @@
       }
     },
     "error": {
-      "invalid_url": "Bitte eine gültige HTTP- oder HTTPS-URL eingeben."
+      "invalid_url": "Bitte eine gültige HTTP- oder HTTPS-URL eingeben.",
+      "invalid_class": "Bitte eine gültige Klasse eingeben.",
+      "class_already_configured": "Diese Klasse ist bereits eingerichtet."
     },
     "abort": {
       "already_configured": "Diese Klasse ist bereits eingerichtet."
@@ -30,6 +32,7 @@
       }
     },
     "error": {
+      "invalid_class": "Bitte eine gültige Klasse eingeben.",
       "class_already_configured": "Diese Klasse ist bereits in einem anderen Eintrag eingerichtet."
     }
   }
