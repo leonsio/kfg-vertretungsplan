@@ -16,7 +16,7 @@ from .const import (
 )
 
 SCAN_INTERVAL_SCHEMA = vol.All(vol.Coerce(int), vol.Range(min=60, max=3600))
-CLASS_SCHEMA = vol.All(str, lambda value: value.strip(), vol.Length(min=1, max=32))
+CLASS_SCHEMA = vol.All(str, vol.Length(min=1, max=32))
 
 
 def _configured_class(entry) -> str:
@@ -32,7 +32,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             base_url = user_input[CONF_BASE_URL].strip().rstrip("/")
             class_name = user_input[CONF_CLASS].strip()
             parsed = urlparse(base_url)
-            if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            if not class_name:
+                errors[CONF_CLASS] = "invalid_class"
+            elif parsed.scheme not in ("http", "https") or not parsed.netloc:
                 errors[CONF_BASE_URL] = "invalid_url"
             elif any(
                 _configured_class(entry).lower() == class_name.lower()
@@ -79,6 +81,12 @@ class KFGOptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_init(self, user_input=None):
         if user_input is not None:
             class_name = user_input[CONF_CLASS].strip()
+            if not class_name:
+                return self.async_show_form(
+                    step_id="init",
+                    data_schema=self._schema(user_input),
+                    errors={CONF_CLASS: "invalid_class"},
+                )
             for other in self.hass.config_entries.async_entries(DOMAIN):
                 if other.entry_id == self.config_entry.entry_id:
                     continue
@@ -88,7 +96,12 @@ class KFGOptionsFlowHandler(config_entries.OptionsFlow):
                         data_schema=self._schema(user_input),
                         errors={CONF_CLASS: "class_already_configured"},
                     )
-            return self.async_create_entry(data=user_input)
+            return self.async_create_entry(
+                data={
+                    CONF_CLASS: class_name,
+                    CONF_SCAN_INTERVAL: user_input[CONF_SCAN_INTERVAL],
+                }
+            )
 
         current_class = self.config_entry.options.get(
             CONF_CLASS,
