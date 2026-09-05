@@ -1,8 +1,8 @@
 # KFG Vertretungsplan
 
-Home-Assistant-Custom-Integration für den schulweiten Untis-Vertretungsplan des Kaiserin-Friedrich-Gymnasiums.
+Home-Assistant-Custom-Integration für den Untis-Vertretungsplan des Kaiserin-Friedrich-Gymnasiums.
 
-Die Integration ruft die schulweite `w00000.htm` für die aktuelle und nächste ISO-Kalenderwoche ab und stellt die Daten als Sensorattribute bereit.
+Die Integration ruft die schulweite `w00000.htm` für die aktuelle und nächste ISO-Kalenderwoche ab. Pro konfigurierter Klasse werden eigene Sensoren erzeugt; der Kollegium-Sensor wird systemweit nur einmal angelegt.
 
 ## Installation über HACS
 
@@ -19,123 +19,133 @@ Die Integration ruft die schulweite `w00000.htm` für die aktuelle und nächste 
 8. Klicke auf **Download**.
 9. Starte Home Assistant neu.
 10. Öffne **Einstellungen → Geräte & Dienste → Integration hinzufügen** und suche nach **KFG Vertretungsplan**.
-11. Folge dem Einrichtungsdialog.
+11. Gib die gewünschte Klasse, die Basis-URL und das Aktualisierungsintervall an.
 
-Die Lovelace-Karte ist Bestandteil der Integration. Nach der Installation wird die JavaScript-Datei automatisch aus der Integration bereitgestellt und von Home Assistant geladen. **Es ist kein Kopieren der Datei nach `/config/www` und keine manuelle Lovelace-Ressource erforderlich.**
+Für weitere Klassen kann **KFG Vertretungsplan mehrfach hinzugefügt** werden. Eine Klasse kann dabei nur einmal konfiguriert werden.
 
-## Dashboard erstellen
+Die Lovelace-Karte ist Bestandteil der Integration. Die JavaScript-Datei wird automatisch bereitgestellt. Es ist kein Kopieren nach `/config/www` und keine manuelle Lovelace-Ressource erforderlich.
 
-### 1. Dashboard anlegen
+## Sensoren pro Klasse
+
+Für die Klasse `7n` entstehen beispielsweise:
+
+```text
+sensor.vertretungsplan_7n
+sensor.vertretungsplan_7n_json
+```
+
+Für `5b2` entsprechend:
+
+```text
+sensor.vertretungsplan_5b2
+sensor.vertretungsplan_5b2_json
+```
+
+### Vertretungsplan-Sensor
+
+`sensor.vertretungsplan_7n` enthält ausschließlich Vertretungseinträge, die zur Klasse `7n` gehören. Auch Einträge mit mehreren Klassen wie `(7n, 7b1)` werden berücksichtigt.
+
+Die Struktur enthält weiterhin unter anderem:
+
+- `generated`
+- `today`
+- `current_week`
+- `next_week`
+- `next_week_available`
+- `class`
+- `classes`
+- `weeks`
+- Tagesnachrichten (`news`)
+- gefilterte Vertretungen (`entries`)
+
+### JSON-Sensor
+
+`sensor.vertretungsplan_7n_json` stellt dieselben klassenbezogenen Daten als kompaktes JSON bereit.
+
+Da ein Home-Assistant-Sensorzustand nur eine begrenzte Textlänge unterstützt, liegt der vollständige JSON-Inhalt im Attribut:
+
+```text
+json
+```
+
+Der eigentliche Sensorzustand enthält den Zeitpunkt der Datengenerierung.
+
+## Kollegium
+
+Unabhängig von der Anzahl konfigurierter Klassen wird nur einmal erzeugt:
+
+```text
+sensor.kfg_kollegium
+```
+
+Der Sensor enthält im Attribut `lehrer` die Zuordnung der Lehrerkürzel zu den Namen. Die Daten stammen von der offiziellen Kollegiumsseite des KFG und werden regelmäßig aktualisiert.
+
+## Klasse oder Aktualisierungsintervall nachträglich ändern
 
 Öffne:
 
-**Einstellungen → Dashboards → Dashboard hinzufügen**
+**Einstellungen → Geräte & Dienste → KFG Vertretungsplan → Zahnrad / Konfigurieren**
 
-und erstelle beispielsweise ein Dashboard mit dem Namen:
+Dort können geändert werden:
 
-**Vertretungsplan**
+- **Klasse**
+- **Aktualisierungsintervall**
 
-### 2. Karte hinzufügen
+Bei einer Klassenänderung werden die zugehörigen Sensoren entsprechend umbenannt. Aus beispielsweise
 
-Öffne das Dashboard und wähle:
+```text
+sensor.vertretungsplan_7n
+sensor.vertretungsplan_7n_json
+```
+
+wird bei Änderung auf `8b1`:
+
+```text
+sensor.vertretungsplan_8b1
+sensor.vertretungsplan_8b1_json
+```
+
+## Dashboard erstellen
+
+Öffne das gewünschte Dashboard und wähle:
 
 **Karte hinzufügen → Manuell**
 
-Die einfachste Konfiguration ist:
+Für Klasse `7n`:
 
 ```yaml
 type: custom:kfg-vertretungsplan-card
-sensor: sensor.vertretungsplan
+sensor: sensor.vertretungsplan_7n
 ```
 
-Speichere die Karte.
+Da der Sensor bereits nur Daten für `7n` enthält, ist ein zusätzlicher `classes:`-Filter normalerweise nicht erforderlich.
 
-Nach der Installation der Integration sollte die Karte bereits als **KFG Vertretungsplan** verfügbar sein. Eine zusätzliche JavaScript-Ressource muss nicht angelegt werden.
-
-## Dashboard konfigurieren
-
-Die Karte kann über YAML-Parameter an die gewünschte Darstellung angepasst werden.
-
-### Alle Klassen interaktiv auswählen
-
-Wenn kein `classes`-Parameter angegeben wird, zeigt die Karte die verfügbaren Klassen als anklickbare Auswahl an:
+Für eine weitere Klasse kann eine zweite Karte verwendet werden:
 
 ```yaml
-type: custom:kfg-vertretungsplan-card
-sensor: sensor.vertretungsplan
+- type: custom:kfg-vertretungsplan-card
+  sensor: sensor.vertretungsplan_7n
+
+- type: custom:kfg-vertretungsplan-card
+  sensor: sensor.vertretungsplan_5b2
 ```
 
-Über die Klassen-Chips können **eine oder mehrere Klassen gleichzeitig** ausgewählt werden. Mit **Alle Klassen** wird die Auswahl zurückgesetzt und wieder der vollständige Vertretungsplan angezeigt.
-
-### Eine Klasse fest konfigurieren
-
-Für ein Dashboard, das ausschließlich für eine bestimmte Klasse gedacht ist, kann die Klasse fest vorgegeben werden:
-
-```yaml
-type: custom:kfg-vertretungsplan-card
-sensor: sensor.vertretungsplan
-classes:
-  - 5b2
-```
-
-Die interaktive Klassenauswahl wird bei einer festen Konfiguration nicht benötigt. Die Karte zeigt dann nur die Vertretungen für `5b2`.
-
-### Mehrere Klassen fest konfigurieren
-
-Es können auch mehrere Klassen fest hinterlegt werden:
-
-```yaml
-type: custom:kfg-vertretungsplan-card
-sensor: sensor.vertretungsplan
-classes:
-  - 5b2
-  - 7n
-  - 9ac
-```
-
-In diesem Beispiel zeigt die Karte ausschließlich Vertretungen für `5b2`, `7n` und `9ac`.
-
-### Konfigurationsparameter
+### Konfigurationsparameter der Karte
 
 | Parameter | Pflicht | Beschreibung | Beispiel |
 |---|---|---|---|
 | `type` | Ja | Name der Custom Card. | `custom:kfg-vertretungsplan-card` |
-| `sensor` | Nein | Entity-ID des Vertretungsplan-Sensors. Standard ist `sensor.vertretungsplan`. | `sensor.vertretungsplan` |
-| `classes` | Nein | Liste mit einer oder mehreren fest vorgegebenen Klassen. Wird der Parameter weggelassen, erscheint die interaktive Klassenauswahl. | `['5b2', '7n']` |
-
-### Mehrere Karten für unterschiedliche Klassen
-
-Es ist möglich, mehrere Karten auf einem Dashboard zu verwenden, beispielsweise eine Karte für jedes Kind bzw. jede Klasse:
-
-```yaml
-- type: custom:kfg-vertretungsplan-card
-  sensor: sensor.vertretungsplan
-  classes:
-    - 5b2
-
-- type: custom:kfg-vertretungsplan-card
-  sensor: sensor.vertretungsplan
-  classes:
-    - 7n
-```
-
-Alternativ kann eine gemeinsame Karte für mehrere Klassen verwendet werden:
-
-```yaml
-- type: custom:kfg-vertretungsplan-card
-  sensor: sensor.vertretungsplan
-  classes:
-    - 5b2
-    - 7n
-```
+| `sensor` | Ja empfohlen | Entity-ID des klassenbezogenen Vertretungsplan-Sensors. | `sensor.vertretungsplan_7n` |
+| `teacher_sensor` | Nein | Sensor mit Lehrerkürzeln und Namen. Standard ist `sensor.kfg_kollegium`. | `sensor.kfg_kollegium` |
+| `classes` | Nein | Zusätzlicher Frontend-Filter. Bei einem bereits klassenbezogenen Sensor normalerweise nicht erforderlich. | `['7n']` |
 
 ## Darstellung
 
 Die Karte zeigt den Vertretungsplan ab dem aktuellen Tag und für die folgenden Schultage der aktuellen bzw. nächsten verfügbaren Kalenderwoche.
 
-Die Vertretungen werden tabellarisch mit folgenden Informationen dargestellt:
+Die Vertretungen werden tabellarisch dargestellt mit:
 
-- **Klasse**
+- **Klasse** – entfällt bei einer einzelnen fest konfigurierten Klasse
 - **Stunde**
 - **Fach**
 - **Lehrer**
@@ -143,20 +153,18 @@ Die Vertretungen werden tabellarisch mit folgenden Informationen dargestellt:
 - **Raum**
 - **Art**
 
-Vorhandene Tagesnachrichten werden ebenfalls angezeigt. Der Wochentyp (**Woche A** bzw. **Woche B**) wird im jeweiligen Tagesbereich hervorgehoben.
+Vorhandene Tagesnachrichten werden ebenfalls angezeigt. Der Wochentyp (**Woche A** bzw. **Woche B**) wird hervorgehoben.
 
-Die Karte verwendet eine farbliche Kennzeichnung der verschiedenen Vertretungsarten, damit Änderungen wie Vertretung, Entfall oder Tausch schneller erkennbar sind.
-
-Lehrerkürzel werden – soweit auf der Kollegiumsseite des Kaiserin-Friedrich-Gymnasiums vorhanden – durch den Namen ergänzt. Wenn für ein Kürzel kein Name gefunden wird, bleibt das Kürzel aus dem Vertretungsplan erhalten.
+Lehrerkürzel werden über `sensor.kfg_kollegium` aufgelöst. Fehlt ein Kürzel dort, wird das Originalkürzel des Vertretungsplans angezeigt.
 
 ## Aktualisierung
 
-Der Sensor wird von der Integration automatisch aktualisiert. Das Dashboard verwendet die aktuellen Daten des Sensors; eine manuelle Aktualisierung der Karte ist nicht erforderlich.
+Jeder Klassen-Eintrag besitzt ein eigenes einstellbares Aktualisierungsintervall. Es kann nachträglich über das Zahnrad des jeweiligen Integrationseintrags geändert werden.
 
 ## Hinweise
 
 - Für HACS muss das Repository als **Integration** hinzugefügt werden.
-- Die Lovelace-Karte wird automatisch mit der Integration bereitgestellt.
-- Die Klassenauswahl wird bei einer interaktiven Karte lokal im Browser gespeichert; sie benötigt keinen zusätzlichen Home-Assistant-Helper.
-- Bei einer festen `classes`-Konfiguration wird die Anzeige durch die YAML-Konfiguration des Dashboards bestimmt.
-- Nach einem Update der Integration kann ein Neuladen des Browsers erforderlich sein, damit eine aktualisierte JavaScript-Karte geladen wird.
+- Die Lovelace-Karte wird automatisch als Ressource bereitgestellt.
+- Mehrere Klassen werden als mehrere Integrationseinträge angelegt.
+- `sensor.kfg_kollegium` wird nur einmal erstellt.
+- Nach einem Update kann ein vollständiges Neuladen des Browsers erforderlich sein, damit eine neue JavaScript-Version der Karte verwendet wird.
