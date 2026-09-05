@@ -12,7 +12,9 @@
       }
     },
     "error": {
-      "invalid_url": "Enter a valid HTTP or HTTPS URL."
+      "invalid_url": "Enter a valid HTTP or HTTPS URL.",
+      "invalid_class": "Enter a valid class.",
+      "class_already_configured": "This class is already configured."
     },
     "abort": {
       "already_configured": "This class is already configured."
@@ -30,6 +32,7 @@
       }
     },
     "error": {
+      "invalid_class": "Enter a valid class.",
       "class_already_configured": "This class is already configured in another entry."
     }
   }
