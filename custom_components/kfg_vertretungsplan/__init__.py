@@ -92,11 +92,6 @@ async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> Non
         if entity_id and entity_id != desired_entity_id and registry.async_get(desired_entity_id) is None:
             registry.async_update_entity(entity_id, new_entity_id=desired_entity_id)
 
-    hass.config_entries.async_update_entry(
-        entry,
-        title=f"KFG Vertretungsplan {class_name}",
-        unique_id=class_name.lower(),
-    )
     await hass.config_entries.async_reload(entry.entry_id)
 
 
