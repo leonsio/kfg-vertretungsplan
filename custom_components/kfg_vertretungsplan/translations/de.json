@@ -1,16 +1,36 @@
 {
   "config": {
-    "step": {"user": {"title": "KFG Vertretungsplan", "description": "Konfiguriere die Basis-URL und das Aktualisierungsintervall.", "data": {"base_url": "Basis-URL", "scan_interval": "Aktualisierung (Sekunden)"}}},
-    "error": {"invalid_url": "Bitte eine gültige HTTP- oder HTTPS-URL eingeben."},
-    "abort": {"single_instance_allowed": "Die Integration ist bereits eingerichtet."}
+    "step": {
+      "user": {
+        "title": "KFG Vertretungsplan",
+        "description": "Lege einen Vertretungsplan für eine Klasse an. Für weitere Klassen kann die Integration mehrfach hinzugefügt werden.",
+        "data": {
+          "class_name": "Klasse",
+          "base_url": "Basis-URL",
+          "scan_interval": "Aktualisierung (Sekunden)"
+        }
+      }
+    },
+    "error": {
+      "invalid_url": "Bitte eine gültige HTTP- oder HTTPS-URL eingeben."
+    },
+    "abort": {
+      "already_configured": "Diese Klasse ist bereits eingerichtet."
+    }
   },
   "options": {
     "step": {
       "init": {
         "title": "KFG Vertretungsplan – Einstellungen",
-        "description": "Ändere das Aktualisierungsintervall nachträglich. Die Änderung wird direkt übernommen.",
-        "data": {"scan_interval": "Aktualisierung (Sekunden)"}
+        "description": "Ändere die Klasse oder das Aktualisierungsintervall. Die Sensoren werden anschließend neu geladen.",
+        "data": {
+          "class_name": "Klasse",
+          "scan_interval": "Aktualisierung (Sekunden)"
+        }
       }
+    },
+    "error": {
+      "class_already_configured": "Diese Klasse ist bereits in einem anderen Eintrag eingerichtet."
     }
   }
 }
